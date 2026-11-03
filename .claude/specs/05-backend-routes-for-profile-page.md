@@ -49,7 +49,7 @@
   - `get_category_breakdown(user_id)`
     - returns a list of dicts, each with `name`, `amount`, `pct`
     - `pct` is the percentage of total, rounded to the nearest int
-    - ordered by amount descending
+    - ordered by amount descending; categories with equal amounts are ordered by name ascending (so Other comes before Transport for the seed user)
 - `tests/test_backend_connection.py` — unit and route tests (see Tests to write)
 
 ## New dependencies
@@ -104,7 +104,7 @@
     - `transaction_count` is 8
     - `top_category` is "Bills" (highest single-category total)
     - transaction list appears in newest-first order (first row is the Other / Gift expense, last row is the Bills / Electricity bill expense)
-    - category breakdown contains all 7 categories, with percentages Bills 35, Food 18, Shopping 14, Health 10, Entertainment 9, Transport 7, Other 7
+    - category breakdown contains all 7 categories, with percentages Bills 35, Food 18, Shopping 14, Health 10, Entertainment 9, Other 7, Transport 7 (in that order)
 
 ## Definition of done
 
