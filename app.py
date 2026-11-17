@@ -2,7 +2,7 @@ import calendar
 import math
 import re
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
@@ -11,6 +11,7 @@ from database.db import create_user, get_db, get_user_by_email, init_db, seed_db
 from database.queries import (
     delete_expense_by_id,
     get_category_breakdown,
+    get_daily_spend,
     get_expense_by_id,
     get_recent_transactions,
     get_summary_stats,
@@ -119,6 +120,24 @@ def _preset_ranges(today):
     ]
 
 
+def _previous_range(start, end):
+    """The equally long window that ends the day before `start`."""
+    span = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    return prev_end - timedelta(days=span - 1), prev_end
+
+
+def _spend_delta(current, previous):
+    """Percentage change against the previous window, or None when there is nothing to compare."""
+    if not previous:
+        return None
+    change = (current - previous) / previous * 100
+    pct = int(abs(change) + 0.5)
+    if pct == 0:
+        return {"direction": "flat", "pct": 0}
+    return {"direction": "up" if change > 0 else "down", "pct": pct}
+
+
 # ------------------------------------------------------------------ #
 # Routes                                                              #
 # ------------------------------------------------------------------ #
@@ -224,11 +243,21 @@ def profile():
             "active": active,
         })
 
+    stats = get_summary_stats(user_id, date_from, date_to)
+
+    delta = None
+    if start and end:
+        prev_from, prev_to = _previous_range(start, end)
+        previous = get_summary_stats(user_id, prev_from.isoformat(), prev_to.isoformat())
+        delta = _spend_delta(stats["total_spent"], previous["total_spent"])
+
     user["initials"] = _initials(user["name"])
     return render_template(
         "profile.html",
         user=user,
-        stats=get_summary_stats(user_id, date_from, date_to),
+        stats=stats,
+        delta=delta,
+        timeline=get_daily_spend(user_id, date_from, date_to),
         expenses=get_recent_transactions(user_id, date_from=date_from, date_to=date_to),
         categories=get_category_breakdown(user_id, date_from, date_to),
         presets=presets,

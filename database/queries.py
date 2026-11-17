@@ -55,7 +55,8 @@ def delete_expense_by_id(expense_id, user_id):
     try:
         with conn:
             cursor = conn.execute(
-                "DELETE FROM expenses WHERE id = ? AND user_id = ?", (expense_id, user_id)
+                "DELETE FROM expenses WHERE id = ? AND user_id = ?",
+                (expense_id, user_id),
             )
         return cursor.rowcount
     finally:
@@ -92,8 +93,9 @@ def get_summary_stats(user_id, date_from=None, date_to=None):
             (user_id, *bounds),
         ).fetchone()
         top = conn.execute(
-            "SELECT category FROM expenses WHERE user_id = ?" + clause +
-            " GROUP BY category"
+            "SELECT category FROM expenses WHERE user_id = ?"
+            + clause
+            + " GROUP BY category"
             " ORDER BY ROUND(SUM(amount), 2) DESC, category ASC LIMIT 1",
             (user_id, *bounds),
         ).fetchone()
@@ -116,8 +118,7 @@ def get_recent_transactions(user_id, limit=10, date_from=None, date_to=None):
     try:
         rows = conn.execute(
             "SELECT id, date, description, category, amount FROM expenses"
-            " WHERE user_id = ?" + clause +
-            " ORDER BY date DESC, id DESC LIMIT ?",
+            " WHERE user_id = ?" + clause + " ORDER BY date DESC, id DESC LIMIT ?",
             (user_id, *bounds, limit),
         ).fetchall()
     finally:
@@ -141,8 +142,7 @@ def get_category_breakdown(user_id, date_from=None, date_to=None):
     try:
         rows = conn.execute(
             "SELECT category, ROUND(SUM(amount), 2) AS total FROM expenses"
-            " WHERE user_id = ?" + clause +
-            " GROUP BY category"
+            " WHERE user_id = ?" + clause + " GROUP BY category"
             " ORDER BY ROUND(SUM(amount), 2) DESC, category ASC",
             (user_id, *bounds),
         ).fetchall()
@@ -163,3 +163,32 @@ def get_category_breakdown(user_id, date_from=None, date_to=None):
     ]
     breakdown[0]["pct"] += 100 - sum(item["pct"] for item in breakdown)
     return breakdown
+
+
+def get_daily_spend(user_id, date_from=None, date_to=None, limit=12):
+    """Most recent days that have spend, oldest first, with each day's share of the peak."""
+    clause, bounds = _date_clause(date_from, date_to)
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT date, ROUND(SUM(amount), 2) AS total FROM expenses"
+            " WHERE user_id = ?" + clause + " GROUP BY date ORDER BY date DESC LIMIT ?",
+            (user_id, *bounds, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return []
+
+    days = list(reversed(rows))
+    peak = max(row["total"] for row in days)
+    return [
+        {
+            "date": row["date"],
+            "label": datetime.strptime(row["date"], "%Y-%m-%d").strftime("%d %b"),
+            "amount": row["total"],
+            "pct": int(row["total"] / peak * 100 + 0.5) if peak > 0 else 0,
+        }
+        for row in days
+    ]

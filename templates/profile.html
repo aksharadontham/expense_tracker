@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Profile — Spendly{% endblock %}
+{% block title %}Dashboard — Spendly{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
@@ -15,15 +15,24 @@
         <div class="user-details">
             <h1 class="user-name">{{ user.name }}</h1>
             <p class="user-email">{{ user.email }}</p>
-            <p class="user-since">Member since {{ user.member_since }}</p>
+            <p class="user-since"><i data-lucide="calendar"></i>Member since {{ user.member_since }}</p>
         </div>
+        <a href="{{ url_for('add_expense') }}" class="btn-primary user-cta"><i data-lucide="plus"></i>Add expense</a>
     </div>
 
     {% for category, message in get_flashed_messages(with_categories=true) %}
-    <div class="flash flash-{{ category }}">{{ message }}</div>
+    <div class="flash flash-{{ category }}">
+        <i data-lucide="{{ 'check-circle' if category == 'success' else 'alert-circle' }}"></i>
+        <span>{{ message }}</span>
+    </div>
     {% endfor %}
 
     <div class="profile-card filter-bar">
+        <p class="range-note">
+            <i data-lucide="calendar-range"></i>
+            <span class="range-label">Showing</span>
+            <strong>{% if date_from %}{{ date_from|display_date }} — {{ date_to|display_date }}{% else %}All time{% endif %}</strong>
+        </p>
         <div class="filter-presets">
             {% for preset in presets %}
             <a href="{{ preset.url }}" class="filter-btn{% if preset.active %} active{% endif %}">{{ preset.label }}</a>
@@ -42,25 +51,67 @@
 
     <div class="stats-row">
         <div class="stat-card">
-            <span class="stat-label">Total spent</span>
+            <div class="stat-head">
+                <span class="stat-label">Total spent</span>
+                <span class="stat-icon"><i data-lucide="wallet"></i></span>
+            </div>
             <span class="stat-value">₹{{ '%.2f'|format(stats.total_spent) }}</span>
+            {% if delta and delta.direction == 'flat' %}
+            <span class="delta delta-flat"><i data-lucide="minus"></i>Level with the previous period</span>
+            {% elif delta %}
+            <span class="delta delta-{{ delta.direction }}"><i data-lucide="{{ 'trending-up' if delta.direction == 'up' else 'trending-down' }}"></i>{{ delta.pct }}% {{ 'more' if delta.direction == 'up' else 'less' }} than previous period</span>
+            {% else %}
+            <span class="stat-note">{% if date_from %}Nothing spent in the previous period{% else %}Across every recorded expense{% endif %}</span>
+            {% endif %}
         </div>
         <div class="stat-card">
-            <span class="stat-label">Transactions</span>
+            <div class="stat-head">
+                <span class="stat-label">Transactions</span>
+                <span class="stat-icon"><i data-lucide="receipt"></i></span>
+            </div>
             <span class="stat-value">{{ stats.transaction_count }}</span>
+            <span class="stat-note">{% if stats.transaction_count > expenses|length %}Latest {{ expenses|length }} listed below{% elif stats.transaction_count %}All of them listed below{% else %}No activity in this range{% endif %}</span>
         </div>
         <div class="stat-card">
-            <span class="stat-label">Top category</span>
+            <div class="stat-head">
+                <span class="stat-label">Top category</span>
+                <span class="stat-icon"><i data-lucide="tag"></i></span>
+            </div>
             <span class="stat-value">{{ stats.top_category }}</span>
+            <span class="stat-note">{% if categories %}{{ categories[0].pct }}% of everything you spent{% else %}Nothing to rank yet{% endif %}</span>
         </div>
     </div>
 
     <div class="profile-card">
         <div class="card-header">
-            <h2 class="section-title">Transaction history</h2>
+            <h2 class="section-title"><i data-lucide="bar-chart-3"></i>Daily spend</h2>
+            {% if timeline %}<span class="card-note">Most recent {{ timeline|length }} active day{{ '' if timeline|length == 1 else 's' }}</span>{% endif %}
+        </div>
+        {% if timeline %}
+        <div class="chart">
+            {% for day in timeline %}
+            <div class="chart-col">
+                <span class="chart-amount">₹{{ '%.0f'|format(day.amount) }}</span>
+                <div class="chart-track"><div class="chart-bar" data-pct="{{ day.pct }}"></div></div>
+                <span class="chart-day">{{ day.label }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty empty-inline">
+            <span class="empty-icon"><i data-lucide="bar-chart-3"></i></span>
+            <p class="empty-title">No spend to chart</p>
+            <p class="empty-body">Days with expenses show up here as bars.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="profile-card">
+        <div class="card-header">
+            <h2 class="section-title"><i data-lucide="list"></i>Transaction history</h2>
             <a href="{{ url_for('add_expense') }}" class="btn-add">Add Expense</a>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap{% if not expenses %} is-empty{% endif %}">
             <table class="tx-table">
                 <thead>
                     <tr>
@@ -89,10 +140,22 @@
                 </tbody>
             </table>
         </div>
+        {% if not expenses %}
+        <div class="empty">
+            <span class="empty-icon"><i data-lucide="receipt"></i></span>
+            <p class="empty-title">No expenses in this range</p>
+            <p class="empty-body">Widen the date range above, or record what you just spent.</p>
+            <a href="{{ url_for('add_expense') }}" class="btn-primary empty-cta"><i data-lucide="plus"></i>Add your first expense</a>
+        </div>
+        {% endif %}
     </div>
 
     <div class="profile-card">
-        <h2 class="section-title">Category breakdown</h2>
+        <div class="card-header">
+            <h2 class="section-title"><i data-lucide="pie-chart"></i>Category breakdown</h2>
+            {% if categories %}<span class="card-note">{{ categories|length }} of 7 categories used</span>{% endif %}
+        </div>
+        {% if categories %}
         <ul class="cat-list">
             {% for cat in categories %}
             <li class="cat-row">
@@ -103,6 +166,13 @@
             </li>
             {% endfor %}
         </ul>
+        {% else %}
+        <div class="empty empty-inline">
+            <span class="empty-icon"><i data-lucide="pie-chart"></i></span>
+            <p class="empty-title">Nothing to break down</p>
+            <p class="empty-body">Add an expense and your category split shows up here.</p>
+        </div>
+        {% endif %}
     </div>
 
 </section>
