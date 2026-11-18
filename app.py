@@ -1,5 +1,6 @@
 import calendar
 import math
+import os
 import re
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -21,7 +22,7 @@ from database.queries import (
 )
 
 app = Flask(__name__)
-app.secret_key = "spendly-dev-secret-key"
+app.secret_key = os.environ.get("SECRET_KEY", "spendly-dev-secret-key")
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
 

@@ -1,10 +1,14 @@
+import os
 import sqlite3
 from datetime import date
 from pathlib import Path
 
 from werkzeug.security import generate_password_hash
 
-DB_PATH = Path(__file__).resolve().parent.parent / "spendly.db"
+DB_PATH = Path(
+    os.environ.get("SPENDLY_DB_PATH")
+    or Path(__file__).resolve().parent.parent / "spendly.db"
+)
 
 # (day of current month, category, amount, description)
 SEED_EXPENSES = [
